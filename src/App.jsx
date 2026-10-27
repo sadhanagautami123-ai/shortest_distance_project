@@ -222,20 +222,21 @@ function App() {
   }, [addToast]);
 
   const updateUserDisaster = useCallback((id, updates) => {
-    setUserDisasters(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
-    // If updating type and disaster has affectedEdge, auto-update road level
-    if (updates.type) {
-      setUserDisasters(prev => {
-        const d = prev.find(x => x.id === id);
-        if (d?.affectedEdge) {
+    setUserDisasters(prev => {
+      const updated = prev.map(d => d.id === id ? { ...d, ...updates } : d);
+      // If the type is changing and the disaster has an associated road, auto-apply the suggested level
+      if (updates.type) {
+        const changed = updated.find(d => d.id === id);
+        if (changed?.affectedEdge) {
           const suggestedLevels = { flood: 'B3', waterlogging: 'B2', landslide: 'B3', fallen_tree: 'B3', pothole: 'B2', blockage: 'B3' };
           const newLevel = suggestedLevels[updates.type] || 'B3';
-          setEdgeLevel(d.affectedEdge.from, d.affectedEdge.to, newLevel);
+          // Schedule outside this render via setTimeout to avoid nested-setState warning
+          setTimeout(() => setEdgeLevel(changed.affectedEdge.from, changed.affectedEdge.to, newLevel), 0);
         }
-        return prev;
-      });
-    }
-  }, []);
+      }
+      return updated;
+    });
+  }, [setEdgeLevel]);
 
   const deleteUserDisaster = useCallback((id) => {
     setUserDisasters(prev => prev.filter(d => d.id !== id));
@@ -303,8 +304,8 @@ function App() {
     const travelTime = estimateTravelTime(route.distance);
     const levelCounts = { B0: 0, B1: 0, B2: 0 };
     for (let i = 0; i < route.path.length - 1; i++) {
-      const fwd = `${route.path[i]}->${route.path[i+1]}`;
-      const rev = `${route.path[i+1]}->${route.path[i]}`;
+      const fwd = `${route.path[i]}->${route.path[i + 1]}`;
+      const rev = `${route.path[i + 1]}->${route.path[i]}`;
       const lv = roadLevels[fwd] || roadLevels[rev] || 'B0';
       if (levelCounts[lv] !== undefined) levelCounts[lv]++;
     }
